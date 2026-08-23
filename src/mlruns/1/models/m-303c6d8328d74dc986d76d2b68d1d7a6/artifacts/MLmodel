@@ -1,0 +1,22 @@
+artifact_path: /Applications/Venkatesh/Bits/miniProject/Ride-ETA-Prediction/src/mlruns/1/models/m-303c6d8328d74dc986d76d2b68d1d7a6/artifacts
+flavors:
+  python_function:
+    data: model.ubj
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.xgboost
+    python_version: 3.13.13
+  xgboost:
+    code: null
+    data: model.ubj
+    model_class: xgboost.sklearn.XGBRegressor
+    model_format: ubj
+    xgb_version: 3.4.1
+mlflow_version: 3.15.1
+model_id: m-303c6d8328d74dc986d76d2b68d1d7a6
+model_size_bytes: 991108
+model_uuid: m-303c6d8328d74dc986d76d2b68d1d7a6
+prompts: null
+run_id: 267b68132e0940b3b3cea60b67e91629
+utc_time_created: '2026-08-23 10:33:18.615949'

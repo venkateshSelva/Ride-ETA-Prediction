@@ -1,0 +1,9 @@
+artifact_location: file:///Applications/Venkatesh/Bits/miniProject/Ride-ETA-Prediction/src/../logs/mlflow/106850715721980816
+creation_time: 1787378046223
+effective_trace_archival_retention: null
+experiment_id: '106850715721980816'
+last_update_time: 1787378046223
+lifecycle_stage: active
+name: ETA_Prediction
+trace_location: null
+workspace: default

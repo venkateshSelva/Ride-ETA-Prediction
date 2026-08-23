@@ -1,0 +1,10 @@
+artifact_location: file:///Applications/Venkatesh/Bits/miniProject/Ride-ETA-Prediction/src/../logs/mlflow/106850715721980816/models/m-9cb852cf4a9b40cdb43b749f23ebd2dd/artifacts
+creation_timestamp: 1787379499666
+experiment_id: '106850715721980816'
+last_updated_timestamp: 1787379502548
+model_id: m-9cb852cf4a9b40cdb43b749f23ebd2dd
+model_type: null
+name: linear_regression_model
+source_run_id: da2bb790640a476fabfeb1ad429d99f7
+status: 2
+status_message: null

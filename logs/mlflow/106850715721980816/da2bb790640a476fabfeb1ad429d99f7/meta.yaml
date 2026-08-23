@@ -1,0 +1,14 @@
+artifact_uri: file:///Applications/Venkatesh/Bits/miniProject/Ride-ETA-Prediction/src/../logs/mlflow/106850715721980816/da2bb790640a476fabfeb1ad429d99f7/artifacts
+end_time: 1787379502549
+entry_point_name: ''
+experiment_id: '106850715721980816'
+lifecycle_stage: active
+run_id: da2bb790640a476fabfeb1ad429d99f7
+run_name: LinearRegression
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1787379499597
+status: 3
+tags: []
+user_id: venkatesh

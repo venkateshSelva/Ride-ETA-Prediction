@@ -1,0 +1,10 @@
+artifact_location: file:///Applications/Venkatesh/Bits/miniProject/Ride-ETA-Prediction/src/../logs/mlflow/106850715721980816/models/m-b4c991c0effa4acaa7a534d3f05c4d82/artifacts
+creation_timestamp: 1787379503706
+experiment_id: '106850715721980816'
+last_updated_timestamp: 1787379504805
+model_id: m-b4c991c0effa4acaa7a534d3f05c4d82
+model_type: null
+name: xgboost_model
+source_run_id: 7e6359f56f5549f080f65a48a6a54890
+status: 2
+status_message: null

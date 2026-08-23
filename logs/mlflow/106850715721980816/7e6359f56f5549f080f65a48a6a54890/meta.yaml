@@ -1,0 +1,14 @@
+artifact_uri: file:///Applications/Venkatesh/Bits/miniProject/Ride-ETA-Prediction/src/../logs/mlflow/106850715721980816/7e6359f56f5549f080f65a48a6a54890/artifacts
+end_time: 1787379504806
+entry_point_name: ''
+experiment_id: '106850715721980816'
+lifecycle_stage: active
+run_id: 7e6359f56f5549f080f65a48a6a54890
+run_name: XGBoost
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1787379502550
+status: 3
+tags: []
+user_id: venkatesh
