@@ -1,0 +1,14 @@
+{
+  "source": "Open-Meteo Historical Weather API (ERA5 reanalysis)",
+  "source_url": "https://archive-api.open-meteo.com/v1/archive?latitude=40.7128&longitude=-74.006&start_date=2016-01-01&end_date=2016-06-30&daily=weather_code%2Ctemperature_2m_mean%2Cprecipitation_sum%2Csnowfall_sum&timezone=America%2FNew_York",
+  "retrieved_at_utc": "2026-08-24T18:01:03.229221+00:00",
+  "location": {
+    "latitude": 40.7128,
+    "longitude": -74.006
+  },
+  "date_range": {
+    "start": "2016-01-01",
+    "end": "2016-06-30"
+  },
+  "rows": 182
+}

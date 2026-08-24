@@ -1,0 +1,13 @@
+{
+  "scenario": "rush-hour/festival surge",
+  "samples": 100,
+  "generated_at_utc": "2026-08-24T18:11:57.026386+00:00",
+  "prediction_count": 100,
+  "labeled_prediction_count": 100,
+  "rush_hour_share": 1.0,
+  "rmse_seconds": 625.9784025792699,
+  "mae_seconds": 538.252480737098,
+  "drift_detected": true,
+  "performance_degraded": true,
+  "retrain_required": true
+}

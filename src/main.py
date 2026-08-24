@@ -1,33 +1,48 @@
-import subprocess
-import os
-from data_preprocessing import validate_and_engineer
-from train_model import train_models
+"""Run the full four-week project pipeline."""
 
-def main():
-    print("🚀 Starting Ride ETA Prediction pipeline...")
+from __future__ import annotations
 
-    # Get the project root directory (parent of src)
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    
-    # Paths relative to project root
-    raw_data_path = os.path.join(project_root, "data/raw/nyc_taxi.csv")
-    processed_data_path = os.path.join(project_root, "data/processed/processed_data.csv")
-    model_output_path = os.path.join(project_root, "models/best_model.pkl")
+import argparse
+import json
 
-    # Step 1: Preprocessing
-    print("\n🔹 Step 1: Data Preprocessing")
-    validate_and_engineer(raw_data_path, processed_data_path)
+from src.config import WEATHER_DATA_PATH
+from src.data_preprocessing import validate_and_engineer
+from src.fetch_weather import fetch_weather
+from src.simulate_drift import simulate_drift
+from src.train_model import train_models
 
-    # Step 2: Model Training + Experiment Tracking
-    print("\n🔹 Step 2: Model Training & MLflow Tracking")
-    train_models(processed_data_path, model_output_path)
 
-    print("\n✅ Pipeline complete. Best model saved at:", model_output_path)
-    
-    # Path for MLflow database
-    mlflow_db_path = os.path.join(project_root, "logs/mlflow.db")
-    print("\n📊 To view MLflow experiments, run:")
-    print(f"   mlflow ui --backend-store-uri sqlite:///{mlflow_db_path}")
+def main(*, refresh_weather: bool = False, max_rows: int | None = None, run_drift: bool = False) -> dict:
+    if refresh_weather or not WEATHER_DATA_PATH.exists():
+        weather = fetch_weather()
+        weather_rows = len(weather)
+    else:
+        weather_rows = None
+    quality = validate_and_engineer(require_weather=True)
+    model_report = train_models(max_rows=max_rows)
+    result = {
+        "weather_rows_downloaded": weather_rows,
+        "data_quality": quality,
+        "model_training": model_report,
+    }
+    if run_drift:
+        result["drift_simulation"] = simulate_drift()
+    return result
+
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--refresh-weather", action="store_true")
+    parser.add_argument("--max-rows", type=int, help="Optional development-only training row cap")
+    parser.add_argument("--simulate-drift", action="store_true")
+    arguments = parser.parse_args()
+    print(
+        json.dumps(
+            main(
+                refresh_weather=arguments.refresh_weather,
+                max_rows=arguments.max_rows,
+                run_drift=arguments.simulate_drift,
+            ),
+            indent=2,
+        )
+    )

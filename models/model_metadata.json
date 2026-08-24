@@ -1,0 +1,30 @@
+{
+  "model_version": "2.0.0",
+  "created_at_utc": "2026-08-24T18:11:53.478525+00:00",
+  "model_name": "gradient_boosting",
+  "target": "trip_duration",
+  "target_unit": "seconds",
+  "features": [
+    "hour_of_day",
+    "day_of_week",
+    "is_weekend",
+    "trip_distance_km",
+    "rush_hour",
+    "weather"
+  ],
+  "dataset_version": "6de842610ff72eea",
+  "training_rows": 1153374,
+  "test_rows": 288344,
+  "test_metrics": {
+    "model": "gradient_boosting",
+    "parameters": {
+      "max_iter": 200,
+      "learning_rate": 0.08
+    },
+    "rmse_seconds": 350.05791832089017,
+    "rmse_minutes": 5.834298638681503,
+    "mae_seconds": 228.77767882309416,
+    "mae_minutes": 3.812961313718236,
+    "r2": 0.7162180148285398
+  }
+}

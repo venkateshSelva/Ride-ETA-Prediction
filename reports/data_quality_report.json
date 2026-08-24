@@ -1,0 +1,61 @@
+{
+  "generated_at_utc": "2026-08-24T18:11:43.652844+00:00",
+  "dataset": "/Users/vivekdatta/MLEProjects/Ride-ETA-Prediction/data/raw/nyc_taxi.csv",
+  "grain": "one completed taxi trip per unique id",
+  "input_rows": 1458644,
+  "output_rows": 1441718,
+  "rejected_rows": 16926,
+  "rejected_rate": 0.011604,
+  "input_columns": [
+    "id",
+    "vendor_id",
+    "pickup_datetime",
+    "dropoff_datetime",
+    "passenger_count",
+    "pickup_longitude",
+    "pickup_latitude",
+    "dropoff_longitude",
+    "dropoff_latitude",
+    "store_and_fwd_flag",
+    "trip_duration"
+  ],
+  "raw_null_counts": {
+    "id": 0,
+    "vendor_id": 0,
+    "pickup_datetime": 0,
+    "dropoff_datetime": 0,
+    "passenger_count": 0,
+    "pickup_longitude": 0,
+    "pickup_latitude": 0,
+    "dropoff_longitude": 0,
+    "dropoff_latitude": 0,
+    "store_and_fwd_flag": 0,
+    "trip_duration": 0
+  },
+  "exact_duplicate_rows": 0,
+  "rejection_reason_counts_overlapping": {
+    "missing_required_value": 0,
+    "duplicate_trip_id": 0,
+    "invalid_timestamp": 0,
+    "dropoff_not_after_pickup": 0,
+    "duration_timestamp_mismatch": 0,
+    "duration_outside_60_to_14400_seconds": 10672,
+    "passenger_count_outside_1_to_6": 65,
+    "coordinate_outside_global_range": 0,
+    "coordinate_outside_service_area": 38,
+    "distance_outside_0.05_to_100_km": 6199
+  },
+  "output_duplicate_ids": 0,
+  "output_null_values": 0,
+  "pickup_time_min": "2016-01-01T00:00:17",
+  "pickup_time_max": "2016-06-30T23:59:39",
+  "weather_counts": {
+    "cloudy": 680588,
+    "rainy": 539336,
+    "snowy": 142308,
+    "clear": 79486
+  },
+  "weather_coverage_rate": 1.0,
+  "weather_warning": null,
+  "status": "passed_with_rejections"
+}

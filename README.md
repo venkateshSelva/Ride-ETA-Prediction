@@ -1,204 +1,179 @@
-# Ride-ETA-Prediction
-A logistics or ride-hailing platform wants to predict delivery time (or ride ETA) based on trip distance, time of day, weather conditions, traffic patterns, and pickup/drop-off location.
+# Ride ETA Prediction
 
-# Project Structure
+Student project for predicting NYC taxi trip duration from trip time, pickup and
+drop-off coordinates, distance, rush-hour status, and weather.
+
+## Objectives and implementation
+
+| Week | Objective | Implementation |
+|---|---|---|
+| 1 | Ingest, validate, engineer features, version data | `src/data_preprocessing.py` validates the trip schema, timestamps, GPS coordinates and trip values; creates time, distance, rush-hour and weather features; and writes a quality report plus dataset hash. |
+| 2 | Compare models and track experiments | `src/train_model.py` compares Linear Regression and Gradient Boosting using RMSE, MAE and R². Parameters and metrics are saved in MLflow. |
+| 3 | Package and serve the best model | The lower-RMSE model is saved as `models/best_model.pkl`. `src/app.py` serves it through `POST /predict`. |
+| 4 | Log errors, simulate drift, monitor and trigger retraining | Predictions and optional actual durations are logged to JSONL. `src/simulate_drift.py` simulates a rush-hour surge. `src/monitoring.py` reports error metrics and sets `retrain_required`. |
+
+## Project flow
+
+```mermaid
+flowchart LR
+    A[Raw NYC trip data] --> B[Validate schema, GPS and timestamps]
+    W[Historical weather] --> C[Feature engineering]
+    B --> C
+    C --> D[Versioned processed dataset]
+    D --> E[Linear Regression]
+    D --> F[Gradient Boosting]
+    E --> G[MLflow model comparison]
+    F --> G
+    G --> H[Best model.pkl]
+    H --> I[POST /predict]
+    I --> J[Prediction and actual log]
+    K[Rush-hour drift simulation] --> J
+    J --> L[RMSE, MAE and rush-hour monitoring]
+    L --> M{Threshold exceeded?}
+    M -->|Yes| N[Retraining required]
+    M -->|No| O[Continue monitoring]
 ```
-Ride-ETA-Prediction/
-├── data/
-│   ├── raw/              # Original dataset (NYC taxi trips)
-│   └── processed/        # Cleaned and engineered dataset
-├── src/
-│   ├── data_preprocessing.py  # Data cleaning and feature engineering
-│   ├── train_model.py      # Model training and evaluation with MLflow
-│   └── main.py            # Main pipeline orchestration script
-├── notebooks/
-│   ├── 01_data_exploration.ipynb    # EDA and visualization
-│   ├── 02_feature_engineering.ipynb  # Feature engineering experiments
-│   └── 03_model_experiments.ipynb    # Model training experiments
-├── models/               # Trained model files
-├── logs/                 # MLflow tracking logs and database
-├── venv/                 # Python virtual environment
-├── .gitignore
-├── requirements.txt
-└── README.md
-```
-
-# Pipeline Steps
-
-## Step 1: Data Preprocessing
-
-**Script:** `src/data_preprocessing.py`
-
-**What It Does:**
-- Loads the raw dataset from `data/raw/nyc_taxi.csv`
-- Validates data by removing missing values and unrealistic trip durations
-- Engineers features:
-  - Time features (hour_of_day, day_of_week, is_weekend)
-  - Distance (trip_distance_km using Haversine formula)
-  - Traffic (rush_hour flag)
-  - Weather (synthetic categorical feature)
-- Saves the cleaned dataset to `data/processed/processed_data.csv`
-- Logs progress for monitoring
-
-**How to Run:**
-```bash
-python src/data_preprocessing.py
-```
-
-## Step 2: Model Training with MLflow
-
-**Script:** `src/train_model.py`
-
-**What It Does:**
-- Loads the processed dataset from Step 1
-- Encodes categorical features (weather)
-- Splits data into train/test sets
-- Trains two models:
-  - Linear Regression (baseline)
-  - XGBoost (advanced)
-- Evaluates models using RMSE and R² metrics
-- **Logs all experiments to MLflow** with:
-  - Model parameters
-  - Performance metrics
-  - Trained models
-  - Generated plots (predictions, feature importance)
-- Saves the best model to `models/best_model.pkl`
-- Generates visualization plots saved to `logs/`
-
-**How to Run:**
-```bash
-python src/train_model.py
-```
-
-## Step 3: MLflow Experiment Tracking
-
-**What It Does:**
-- Launches the MLflow UI for experiment visualization
-- Allows comparison of different model runs
-- Provides detailed metrics, parameters, and artifacts
-- Enables model versioning and management
-
-**How to Run:**
-```bash
-mlflow ui --backend-store-uri sqlite:///logs/mlflow.db
-```
-
-Then open http://127.0.0.1:5000 in your browser to view:
-- Training runs and metrics comparison
-- Model hyperparameters
-- Performance plots and visualizations
-- Model artifacts and downloads
-
-# Suggested Notebooks
-
-## 1. `01_data_exploration.ipynb`
-
-**Purpose:** Explore the raw dataset before preprocessing with MLflow integration.
-
-**Contents:**   
-- Load data/raw/nyc_taxi.csv
-- Show head, shape, missing values
-- Plot distributions (trip duration, passenger count, pickup times)
-- **MLflow Integration:**
-  - Logs EDA artifacts (summary stats, missing values reports)
-  - Saves visualization plots to MLflow
-  - Uses "EDA" experiment for tracking exploratory analysis
-
-## 2. `02_feature_engineering.ipynb`
-
-**Purpose:** Prototype new features interactively with MLflow tracking.
-
-**Contents:**   
-- Test Haversine distance calculation
-- Validate raw data (remove invalid trips)
-- Engineer features (hour_of_day, day_of_week, is_weekend, trip_distance_km, rush_hour, weather)
-- Visualize feature relationships (distance vs duration, hourly patterns, weekend vs weekday)
-- **MLflow Integration:**
-  - Logs engineered dataset samples
-  - Saves feature relationship plots to MLflow
-  - Uses "FeatureEngineering" experiment for tracking feature development
-
-## 3. `03_model_experiments.ipynb`
-
-**Purpose:** Try models interactively before finalizing in train_model.py with MLflow experiment tracking.
-
-**Contents:**   
-- Load processed dataset from data/processed/processed_data.csv
-- Train Linear Regression with MLflow parameter/metric logging
-- Train XGBoost with hyperparameter tracking
-- Plot predicted vs actual durations
-- Compare RMSE, R² metrics
-- Visualize feature importance (XGBoost)
-- **MLflow Integration:**
-  - Logs model parameters (n_estimators, learning_rate, max_depth)
-  - Logs performance metrics (RMSE, R²)
-  - Saves trained models to MLflow
-  - Logs prediction plots and feature importance visualizations
-  - Uses "ModelExperiments" experiment for tracking model development
-  - Saves best model locally to models/best_model_notebook.pkl
-
-# How to Use
 
 ## Setup
-1. Clone the repository and navigate to the project directory
-2. Create and activate the virtual environment:
+
+The two large CSV files use Git LFS:
+
 ```bash
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-3. Install required packages:
-```bash
+git lfs install
+git lfs pull
+
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Run the Complete Pipeline
-The main pipeline script automates the entire process from data preprocessing to model training:
+## Run each week
+
+### Week 1: data preparation
+
+Download the historical daily NYC weather used by the weather feature, then
+prepare the dataset:
 
 ```bash
-# From project root
-source venv/bin/activate
-python src/main.py
+python -m src.fetch_weather
+python -m src.data_preprocessing --require-weather
 ```
 
-This will:
-- Preprocess the raw data
-- Train both Linear Regression and XGBoost models
-- Log experiments to MLflow
-- Save the best model to `models/best_model.pkl`
+Outputs:
 
-## Individual Steps
+- `data/processed/processed_data.csv`
+- `data/processed/dataset_metadata.json`
+- `reports/data_quality_report.json`
 
-### Step 1: Data Preprocessing
+### Week 2: model training
+
 ```bash
-python src/data_preprocessing.py
+python -m src.train_model
 ```
-Cleans and engineers features from the raw dataset.
 
-### Step 2: Model Training
-```bash
-python src/train_model.py
-```
-Trains and evaluates models, logs to MLflow.
+Outputs:
 
-### Step 3: View MLflow Experiments
+- `models/best_model.pkl`
+- `models/model_metadata.json`
+- `reports/model_comparison.json`
+- MLflow runs in `logs/mlflow.db`
+
+View the experiments with:
+
 ```bash
 mlflow ui --backend-store-uri sqlite:///logs/mlflow.db
 ```
-Then open http://127.0.0.1:5000 in your browser to view:
-- Training runs and metrics
-- Model comparisons
-- Hyperparameters
-- Generated plots
 
-## Run Jupyter Notebooks
+### Week 3: REST API
+
 ```bash
-source venv/bin/activate
-jupyter notebook
+uvicorn src.app:app --reload
 ```
-Access the notebooks in the `notebooks/` directory for exploratory analysis and model experimentation.
 
-## File Paths
-- Raw data: `data/raw/nyc_taxi.csv`
-- Processed data: `data/processed/processed_data.csv`
-- Best model: `models/best_model.pkl`
-- MLflow database: `logs/mlflow.db`
+Example request:
+
+```bash
+curl -X POST http://127.0.0.1:8000/predict \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "pickup_datetime": "2016-06-15T18:30:00",
+    "pickup_latitude": 40.7580,
+    "pickup_longitude": -73.9855,
+    "dropoff_latitude": 40.7308,
+    "dropoff_longitude": -73.9973,
+    "weather": "rainy",
+    "actual_duration": 900
+  }'
+```
+
+`actual_duration` is optional and is measured in seconds. When supplied, the
+API also records the prediction error for Week 4 monitoring. ETA is returned in
+both seconds and minutes.
+
+### Week 4: monitoring and drift
+
+```bash
+python -m src.simulate_drift
+python -m src.monitoring --predictions logs/drift_predictions.jsonl
+```
+
+The monitoring report contains prediction count, labeled count, RMSE, MAE,
+rush-hour share, drift status and `retrain_required`.
+
+## Run the complete pipeline
+
+```bash
+python -m src.main --simulate-drift
+```
+
+## Tests
+
+```bash
+pytest
+```
+
+## Submission demo and recording
+
+The script below runs the important checks in rubric order and saves the
+terminal results in `submission_evidence/`:
+
+```bash
+bash scripts/run_submission_demo.sh
+```
+
+It performs these steps:
+
+1. Runs the automated tests.
+2. Runs Week 1 preprocessing and displays the validation counts.
+3. Trains both Week 2 models and displays their comparison.
+4. Starts the API locally, sends one real request, and saves the response.
+5. Runs the Week 4 rush-hour simulation and monitoring check.
+6. Copies the final JSON reports into `submission_evidence/`.
+
+The command produces:
+
+```text
+submission_evidence/
+├── 01_tests.txt
+├── 02_data_preprocessing.txt
+├── 03_model_training.txt
+├── 04_api_server.txt
+├── 04_api_response.json
+├── 05_drift_simulation.txt
+├── 06_monitoring.txt
+├── data_quality_report.json
+├── model_comparison.json
+└── drift_simulation_report.json
+```
+
+For the screen recording, show the flow diagram first, run the script from the
+project root, and highlight the following lines when they appear:
+
+- `passed` in the test output
+- the number of accepted and rejected rows
+- `selected_model: gradient_boosting`
+- the API's `predicted_eta_minutes`
+- `drift_detected: true`
+- `retrain_required: true`
+
+The complete demo normally takes less than a minute on the supplied dataset.
