@@ -10,7 +10,10 @@ Ride-ETA-Prediction/
 ├── src/
 │   ├── data_preprocessing.py  # Data cleaning and feature engineering
 │   ├── train_model.py      # Model training and evaluation with MLflow
-│   └── main.py            # Main pipeline orchestration script
+│   ├── main.py            # Main pipeline orchestration script
+│   ├── app.py             # FastAPI REST API for model serving
+│   ├── monitoring.py      # Monitoring script for drift detection
+│   └── simulate_drift.py  # Drift simulation script
 ├── notebooks/
 │   ├── 01_data_exploration.ipynb    # EDA and visualization
 │   ├── 02_feature_engineering.ipynb  # Feature engineering experiments
@@ -88,6 +91,37 @@ Then open http://127.0.0.1:5000 in your browser to view:
 - Model hyperparameters
 - Performance plots and visualizations
 - Model artifacts and downloads
+
+## Step 4: Monitoring & Drift Detection
+
+**Scripts:** `src/monitoring.py` and `src/simulate_drift.py`
+
+**What It Does:**
+- **Drift Simulation:** Simulates data drift scenarios (e.g., festival surge) to test model robustness
+- **Monitoring:** Tracks prediction errors from API serving
+- **Automatic Retraining:** Triggers model retraining when prediction error exceeds threshold (5 minutes)
+- **MLflow Integration:** Logs drift metrics and monitoring results
+
+**How to Run:**
+```bash
+# Run drift simulation
+python src/simulate_drift.py
+
+# Run monitoring check
+python src/monitoring.py
+```
+
+**Integrated Pipeline:**
+The complete pipeline includes automatic drift simulation and monitoring:
+```bash
+python src/main.py
+```
+
+This will:
+1. Preprocess data
+2. Train models
+3. Simulate drift scenarios
+4. Check for model drift and trigger retraining if needed
 
 # Suggested Notebooks
 
@@ -202,3 +236,90 @@ Access the notebooks in the `notebooks/` directory for exploratory analysis and 
 - Processed data: `data/processed/processed_data.csv`
 - Best model: `models/best_model.pkl`
 - MLflow database: `logs/mlflow.db`
+
+## API Testing
+
+### Start the API Server
+```bash
+source venv/bin/activate
+uvicorn src.app:app --reload --host 0.0.0.0 --port 8000
+```
+
+Access the API documentation at:
+- **Swagger UI:** http://localhost:8000/docs
+- **ReDoc:** http://localhost:8000/redoc
+
+### Sample API Test Data
+
+#### Example 1: Sunny weekday, rush hour
+```json
+{
+  "pickup_datetime": "2026-08-24T08:30:00",
+  "pickup_latitude": 40.7128,
+  "pickup_longitude": -74.0060,
+  "dropoff_latitude": 40.7306,
+  "dropoff_longitude": -73.9352,
+  "weather": "sunny",
+  "actual_duration": 18.0
+}
+```
+
+#### Example 2: Rainy evening, rush hour
+```json
+{
+  "pickup_datetime": "2026-08-24T18:15:00",
+  "pickup_latitude": 40.7580,
+  "pickup_longitude": -73.9855,
+  "dropoff_latitude": 40.7306,
+  "dropoff_longitude": -73.9352,
+  "weather": "rainy",
+  "actual_duration": 25.0
+}
+```
+
+#### Example 3: Cloudy weekend, off‑peak
+```json
+{
+  "pickup_datetime": "2026-08-23T14:00:00",
+  "pickup_latitude": 40.7306,
+  "pickup_longitude": -73.9352,
+  "dropoff_latitude": 40.6500,
+  "dropoff_longitude": -73.9500,
+  "weather": "cloudy",
+  "actual_duration": 12.0
+}
+```
+
+#### Example 4: Sunny late night (no rush hour)
+```json
+{
+  "pickup_datetime": "2026-08-24T23:45:00",
+  "pickup_latitude": 40.6400,
+  "pickup_longitude": -73.7800,
+  "dropoff_latitude": 40.7306,
+  "dropoff_longitude": -73.9352,
+  "weather": "sunny",
+  "actual_duration": 30.0
+}
+```
+
+### Using curl to Test
+```bash
+curl -X POST "http://localhost:8000/predict" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pickup_datetime": "2026-08-24T08:30:00",
+    "pickup_latitude": 40.7128,
+    "pickup_longitude": -74.0060,
+    "dropoff_latitude": 40.7306,
+    "dropoff_longitude": -73.9352,
+    "weather": "sunny"
+  }'
+```
+
+### Using Swagger UI
+1. Open http://localhost:8000/docs
+2. Click on the `/predict` endpoint
+3. Click "Try it out"
+4. Copy and paste any of the JSON examples above
+5. Click "Execute"
