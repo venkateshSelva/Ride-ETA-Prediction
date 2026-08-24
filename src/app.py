@@ -29,6 +29,7 @@ class TripDetails(BaseModel):
     dropoff_latitude: float
     dropoff_longitude: float
     weather: str
+    actual_duration: float | None = None   # optional field for monitoring drift
 
 # Utility: Haversine distance
 def haversine(lon1, lat1, lon2, lat2):
@@ -77,4 +78,15 @@ def predict_eta(trip: TripDetails):
         mlflow.log_param("weather", trip.weather)
         mlflow.log_metric("predicted_eta", float(eta))
 
-    return {"predicted_eta_minutes": round(float(eta), 2)}
+        # If actual duration is provided, log error
+        error = None
+        if trip.actual_duration is not None:
+            error = trip.actual_duration - float(eta)
+            mlflow.log_metric("actual_duration", trip.actual_duration)
+            mlflow.log_metric("prediction_error", error)
+
+    return {
+        "predicted_eta_minutes": round(float(eta), 2),
+        "actual_duration": trip.actual_duration,
+        "prediction_error": round(error, 2) if error is not None else None
+    }
