@@ -1,0 +1,23 @@
+artifact_path: /Applications/Venkatesh/Bits/miniProject/Ride-ETA-Prediction/src/mlruns/1/models/m-942aae7dce024fffb97b50d026b22f9c/artifacts
+flavors:
+  python_function:
+    env:
+      conda: conda.yaml
+      virtualenv: python_env.yaml
+    loader_module: mlflow.sklearn
+    model_path: model.skops
+    predict_fn: predict
+    python_version: 3.13.13
+  sklearn:
+    code: null
+    pickled_model: model.skops
+    serialization_format: skops
+    sklearn_version: 1.9.0
+    skops_trusted_types: null
+mlflow_version: 3.15.1
+model_id: m-942aae7dce024fffb97b50d026b22f9c
+model_size_bytes: 8178
+model_uuid: m-942aae7dce024fffb97b50d026b22f9c
+prompts: null
+run_id: a1eee602a5fb4d00bc7c57fd52a48c10
+utc_time_created: '2026-08-24 18:45:35.045552'

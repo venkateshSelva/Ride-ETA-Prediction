@@ -90,6 +90,9 @@ mlflow ui --backend-store-uri sqlite:///logs/mlflow.db
 uvicorn src.app:app --reload
 ```
 
+Interactive API documentation is available at `http://127.0.0.1:8000/docs`
+(Swagger UI) and `http://127.0.0.1:8000/redoc` (ReDoc).
+
 Example request:
 
 ```bash
@@ -119,6 +122,19 @@ python -m src.monitoring --predictions logs/drift_predictions.jsonl
 
 The monitoring report contains prediction count, labeled count, RMSE, MAE,
 rush-hour share, drift status and `retrain_required`.
+
+## Notebook walkthroughs
+
+The `notebooks/` directory contains runnable walkthroughs for the three main
+development stages:
+
+- `01_data_exploration.ipynb` explores data quality and trip distributions.
+- `02_feature_engineering.ipynb` demonstrates the engineered time, distance,
+  rush-hour and weather features.
+- `03_model_experiments.ipynb` compares candidate models and their MLflow runs.
+
+Start Jupyter from the project root with `jupyter notebook` and open the desired
+notebook.
 
 ## Run the complete pipeline
 
