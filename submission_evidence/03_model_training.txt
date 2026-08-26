@@ -1,0 +1,26 @@
+{
+  "selected_model": "gradient_boosting",
+  "models": [
+    {
+      "model": "gradient_boosting",
+      "parameters": {
+        "max_iter": 200,
+        "learning_rate": 0.08
+      },
+      "rmse_seconds": 350.05791832089017,
+      "rmse_minutes": 5.834298638681503,
+      "mae_seconds": 228.77767882309416,
+      "mae_minutes": 3.812961313718236,
+      "r2": 0.7162180148285398
+    },
+    {
+      "model": "linear_regression",
+      "parameters": {},
+      "rmse_seconds": 416.7673070106498,
+      "rmse_minutes": 6.94612178351083,
+      "mae_seconds": 282.8775751928992,
+      "mae_minutes": 4.714626253214987,
+      "r2": 0.597753477517126
+    }
+  ]
+}

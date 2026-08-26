@@ -1,92 +1,92 @@
-from fastapi import FastAPI
-from pydantic import BaseModel
+"""Week 3: FastAPI endpoint for ride ETA prediction."""
+
+from __future__ import annotations
+
+import json
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Literal
+
 import joblib
-import datetime
 import numpy as np
-import os
-import mlflow
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, ConfigDict, Field
 
-# Get the project root directory (parent of src)
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(script_dir)
-model_path = os.path.join(project_root, "models/best_model.pkl")
+from src.config import BEST_MODEL_PATH, MODEL_METADATA_PATH, MODEL_VERSION, PREDICTION_LOG_PATH
+from src.features import build_trip_features
+from src.monitoring import log_prediction
 
-# Load the best model
-model = joblib.load(model_path)
 
-# FastAPI app with metadata (shows up in Swagger UI)
-app = FastAPI(
-    title="Ride ETA Prediction API",
-    description="REST API to predict ETA for taxi rides using trained ML models",
-    version="1.0.0"
-)
+Weather = Literal["clear", "cloudy", "foggy", "rainy", "snowy", "unknown"]
 
-# Input schema
+
 class TripDetails(BaseModel):
-    pickup_datetime: str
-    pickup_latitude: float
-    pickup_longitude: float
-    dropoff_latitude: float
-    dropoff_longitude: float
-    weather: str
-    actual_duration: float | None = None   # optional field for monitoring drift
+    model_config = ConfigDict(extra="forbid")
 
-# Utility: Haversine distance
-def haversine(lon1, lat1, lon2, lat2):
-    R = 6371
-    lon1, lat1, lon2, lat2 = map(np.radians, [lon1, lat1, lon2, lat2])
-    dlon = lon2 - lon1
-    dlat = lat2 - lat1
-    a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
-    c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1-a))
-    return R * c
+    pickup_datetime: datetime
+    pickup_latitude: float = Field(ge=39, le=42)
+    pickup_longitude: float = Field(ge=-75, le=-72)
+    dropoff_latitude: float = Field(ge=39, le=42)
+    dropoff_longitude: float = Field(ge=-75, le=-72)
+    weather: Weather = "unknown"
+    actual_duration: float | None = Field(default=None, gt=0, le=86_400)
 
-@app.post("/predict", summary="Predict ETA", response_description="Predicted ETA in minutes")
-def predict_eta(trip: TripDetails):
-    # Parse datetime
-    pickup_time = datetime.datetime.fromisoformat(trip.pickup_datetime)
-    hour_of_day = pickup_time.hour
-    day_of_week = pickup_time.weekday()
-    is_weekend = 1 if day_of_week in [5,6] else 0
-    rush_hour = 1 if hour_of_day in [7,8,9,17,18,19] else 0
 
-    # Distance
-    distance_km = haversine(trip.pickup_longitude, trip.pickup_latitude,
-                            trip.dropoff_longitude, trip.dropoff_latitude)
+def create_app(
+    model_path: str | Path = BEST_MODEL_PATH,
+    prediction_log_path: str | Path = PREDICTION_LOG_PATH,
+    metadata_path: str | Path = MODEL_METADATA_PATH,
+) -> FastAPI:
+    model_path = Path(model_path)
+    try:
+        model = joblib.load(model_path)
+    except Exception:
+        model = None
+    metadata_path = Path(metadata_path)
+    metadata = (
+        json.loads(metadata_path.read_text(encoding="utf-8"))
+        if metadata_path.exists()
+        else {"model_version": MODEL_VERSION}
+    )
+    service = FastAPI(title="Ride ETA Prediction API", version=MODEL_VERSION)
 
-    # Weather one-hot (simplified) - must match training encoding
-    weather_map = {"sunny": [0,0], "rainy": [1,0], "cloudy": [0,1]}
-    weather_features = weather_map.get(trip.weather.lower(), [0,0])
+    @service.post("/predict")
+    def predict_eta(trip: TripDetails) -> dict:
+        if model is None:
+            raise HTTPException(status_code=503, detail="Model unavailable. Run the training script first.")
+        features = build_trip_features(
+            trip.pickup_datetime,
+            trip.pickup_latitude,
+            trip.pickup_longitude,
+            trip.dropoff_latitude,
+            trip.dropoff_longitude,
+            trip.weather,
+        )
+        eta_seconds = max(float(np.asarray(model.predict(features))[0]), 1.0)
+        error = trip.actual_duration - eta_seconds if trip.actual_duration is not None else None
+        prediction_id = str(uuid.uuid4())
+        log_prediction(
+            {
+                "prediction_id": prediction_id,
+                "created_at_utc": datetime.now(timezone.utc).isoformat(),
+                **features.iloc[0].to_dict(),
+                "predicted_eta_seconds": eta_seconds,
+                "actual_eta_seconds": trip.actual_duration,
+                "prediction_error_seconds": error,
+                "model_version": metadata["model_version"],
+            },
+            prediction_log_path,
+        )
+        return {
+            "prediction_id": prediction_id,
+            "predicted_eta_seconds": round(eta_seconds, 2),
+            "predicted_eta_minutes": round(eta_seconds / 60, 2),
+            "actual_duration": trip.actual_duration,
+            "prediction_error": round(error, 2) if error is not None else None,
+        }
 
-    # Feature vector
-    features = [hour_of_day, day_of_week, is_weekend, distance_km, rush_hour] + weather_features
-    features = np.array(features).reshape(1, -1)
+    return service
 
-    # Predict
-    eta = model.predict(features)[0]
 
-    # --- MLflow Logging ---
-    mlflow.set_tracking_uri(f"sqlite:///{os.path.join(project_root, 'logs/mlflow.db')}")
-    mlflow.set_experiment("Serving")
-
-    with mlflow.start_run(run_name="API_Prediction", nested=True):
-        mlflow.log_param("hour_of_day", hour_of_day)
-        mlflow.log_param("day_of_week", day_of_week)
-        mlflow.log_param("is_weekend", is_weekend)
-        mlflow.log_param("rush_hour", rush_hour)
-        mlflow.log_param("distance_km", distance_km)
-        mlflow.log_param("weather", trip.weather)
-        mlflow.log_metric("predicted_eta", float(eta))
-
-        # If actual duration is provided, log error
-        error = None
-        if trip.actual_duration is not None:
-            error = trip.actual_duration - float(eta)
-            mlflow.log_metric("actual_duration", trip.actual_duration)
-            mlflow.log_metric("prediction_error", error)
-
-    return {
-        "predicted_eta_minutes": round(float(eta), 2),
-        "actual_duration": trip.actual_duration,
-        "prediction_error": round(error, 2) if error is not None else None
-    }
+app = create_app()

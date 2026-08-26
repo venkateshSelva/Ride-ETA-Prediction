@@ -203,6 +203,10 @@ cython_debug/
 # Temporary file for partial code execution
 tempCodeRunnerFile.py
 
+# Generated serving logs and interrupted preprocessing files
+logs/*.jsonl
+data/processed/*.tmp
+
 # Ruff stuff:
 .ruff_cache/
 

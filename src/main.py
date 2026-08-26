@@ -1,85 +1,48 @@
-import subprocess
-import os
-from data_preprocessing import validate_and_engineer
-from train_model import train_models
+"""Run the full four-week project pipeline."""
 
-def simulate_drift(processed_data_path, project_root):
-    print("\n🔹 Step 3: Simulating Drift (Festival Surge)")
-    import pandas as pd
-    import mlflow
-    
-    df = pd.read_csv(processed_data_path)
-    df['actual_duration'] = df['trip_duration'] * 1.5  # simulate surge
+from __future__ import annotations
 
-    # Create logs directory if it doesn't exist
-    logs_dir = os.path.join(project_root, "logs")
-    os.makedirs(logs_dir, exist_ok=True)
-    
-    drift_sample_path = os.path.join(logs_dir, "drift_sample.csv")
-    df.head(100).to_csv(drift_sample_path, index=False)
+import argparse
+import json
 
-    mlflow.set_tracking_uri(f"sqlite:///{os.path.join(project_root, 'logs/mlflow.db')}")
-    mlflow.set_experiment("DriftSimulation")
+from src.config import WEATHER_DATA_PATH
+from src.data_preprocessing import validate_and_engineer
+from src.fetch_weather import fetch_weather
+from src.simulate_drift import simulate_drift
+from src.train_model import train_models
 
-    with mlflow.start_run(run_name="Festival_Surge"):
-        mlflow.log_param("drift_type", "festival surge")
-        mlflow.log_metric("avg_duration_increase", 1.5)
-        mlflow.log_artifact(drift_sample_path, artifact_path="drift")
 
-def monitor_and_retrain(project_root):
-    print("\n🔹 Step 4: Monitoring & Retraining Trigger")
-    import mlflow
-    import numpy as np
-    
-    mlflow.set_tracking_uri(f"sqlite:///{os.path.join(project_root, 'logs/mlflow.db')}")
-    client = mlflow.tracking.MlflowClient()
-    experiment = client.get_experiment_by_name("Serving")
-
-    if experiment:
-        runs = client.search_runs(experiment.experiment_id)
-        errors = [r.data.metrics["prediction_error"] for r in runs if "prediction_error" in r.data.metrics]
-        if errors:
-            avg_error = np.mean(errors)
-            print("📊 Average prediction error:", avg_error)
-            if avg_error > 5.0:  # threshold in minutes
-                print("⚠️ Drift detected! Triggering retraining...")
-                subprocess.call(["python", os.path.join(project_root, "src/train_model.py")])
-        else:
-            print("ℹ️ No prediction errors logged yet.")
+def main(*, refresh_weather: bool = False, max_rows: int | None = None, run_drift: bool = False) -> dict:
+    if refresh_weather or not WEATHER_DATA_PATH.exists():
+        weather = fetch_weather()
+        weather_rows = len(weather)
     else:
-        print("ℹ️ No Serving experiment found.")
+        weather_rows = None
+    quality = validate_and_engineer(require_weather=True)
+    model_report = train_models(max_rows=max_rows)
+    result = {
+        "weather_rows_downloaded": weather_rows,
+        "data_quality": quality,
+        "model_training": model_report,
+    }
+    if run_drift:
+        result["drift_simulation"] = simulate_drift()
+    return result
 
-def main():
-    print("🚀 Starting Ride ETA Prediction pipeline...")
-
-    # Get the project root directory (parent of src)
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    
-    # Paths relative to project root
-    raw_data_path = os.path.join(project_root, "data/raw/nyc_taxi.csv")
-    processed_data_path = os.path.join(project_root, "data/processed/processed_data.csv")
-    model_output_path = os.path.join(project_root, "models/best_model.pkl")
-
-    # Step 1: Preprocessing
-    print("\n🔹 Step 1: Data Preprocessing")
-    validate_and_engineer(raw_data_path, processed_data_path)
-
-    # Step 2: Model Training + Experiment Tracking
-    print("\n🔹 Step 2: Model Training & MLflow Tracking")
-    train_models(processed_data_path, model_output_path)
-
-    print("\n✅ Pipeline complete. Best model saved at:", model_output_path)
-    
-    # Step 3: Drift Simulation
-    simulate_drift(processed_data_path, project_root)
-
-    # Step 4: Monitoring & Retraining
-    monitor_and_retrain(project_root)
-    
-    # Path for MLflow database
-    mlflow_db_path = os.path.join(project_root, "logs/mlflow.db")
-    print("\n📊 To view MLflow experiments, run:")
-    print(f"   mlflow ui --backend-store-uri sqlite:///{mlflow_db_path}")
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--refresh-weather", action="store_true")
+    parser.add_argument("--max-rows", type=int, help="Optional development-only training row cap")
+    parser.add_argument("--simulate-drift", action="store_true")
+    arguments = parser.parse_args()
+    print(
+        json.dumps(
+            main(
+                refresh_weather=arguments.refresh_weather,
+                max_rows=arguments.max_rows,
+                run_drift=arguments.simulate_drift,
+            ),
+            indent=2,
+        )
+    )

@@ -1,110 +1,176 @@
-import pandas as pd
-import numpy as np
+"""Week 2: train, compare, and track two ETA models."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
 import joblib
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error, r2_score
-from xgboost import XGBRegressor
 import mlflow
-import mlflow.sklearn
-import mlflow.xgboost
-import os
+import numpy as np
+import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.impute import SimpleImputer
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
 
-# Set MLflow tracking directory to SQLite backend inside logs/
-# Use absolute path to ensure it works from any directory
-script_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(script_dir)
-mlflow_db_path = os.path.join(project_root, "logs/mlflow.db")
-mlflow.set_tracking_uri(f"sqlite:///{mlflow_db_path}")
-mlflow.set_experiment("ETA_Prediction")
+from src.config import (
+    BEST_MODEL_PATH,
+    CATEGORICAL_FEATURES,
+    DATASET_METADATA_PATH,
+    MLFLOW_DB_PATH,
+    MODEL_FEATURES,
+    MODEL_METADATA_PATH,
+    MODEL_VERSION,
+    NUMERIC_FEATURES,
+    PROCESSED_DATA_PATH,
+    REPORT_DIR,
+    TARGET,
+    ensure_project_directories,
+)
 
-def train_models(input_path, model_output_path):   
-    print("🔹 Loading dataset...")
-    df = pd.read_csv(input_path)
-    df = pd.get_dummies(df, columns=['weather'], drop_first=True)
-    
-    # Create directories if they don't exist
-    os.makedirs(os.path.dirname(model_output_path), exist_ok=True)
-    os.makedirs(os.path.join(project_root, "logs"), exist_ok=True)
 
-    X = df[['hour_of_day', 'day_of_week', 'is_weekend',
-            'trip_distance_km', 'rush_hour'] + 
-            [col for col in df.columns if col.startswith('weather_')]]
-    y = df['trip_duration']
+def make_preprocessor() -> ColumnTransformer:
+    return ColumnTransformer(
+        [
+            (
+                "numeric",
+                Pipeline(
+                    [
+                        ("imputer", SimpleImputer(strategy="median")),
+                        ("scaler", StandardScaler()),
+                    ]
+                ),
+                NUMERIC_FEATURES,
+            ),
+            (
+                "weather",
+                OneHotEncoder(handle_unknown="ignore", sparse_output=False),
+                CATEGORICAL_FEATURES,
+            ),
+        ]
+    )
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    # --- Linear Regression ---
-    with mlflow.start_run(run_name="LinearRegression"):
-        lin_reg = LinearRegression()
-        lin_reg.fit(X_train, y_train)
-        y_pred_lr = lin_reg.predict(X_test)
+def metrics(actual: pd.Series, predicted: np.ndarray) -> dict[str, float]:
+    rmse = float(mean_squared_error(actual, predicted) ** 0.5)
+    mae = float(mean_absolute_error(actual, predicted))
+    return {
+        "rmse_seconds": rmse,
+        "rmse_minutes": rmse / 60,
+        "mae_seconds": mae,
+        "mae_minutes": mae / 60,
+        "r2": float(r2_score(actual, predicted)),
+    }
 
-        lr_rmse = np.sqrt(mean_squared_error(y_test, y_pred_lr))
-        lr_r2 = r2_score(y_test, y_pred_lr)
 
-        mlflow.log_param("model_type", "LinearRegression")
-        mlflow.log_metric("rmse", lr_rmse)
-        mlflow.log_metric("r2", lr_r2)
-        mlflow.sklearn.log_model(lin_reg, "linear_regression_model")
+def dataset_version() -> str:
+    if not DATASET_METADATA_PATH.exists():
+        return "unknown"
+    return str(json.loads(DATASET_METADATA_PATH.read_text(encoding="utf-8"))["dataset_version"])
 
-        # Save model + plot as artifacts
-        linear_reg_path = os.path.join(project_root, "models/linear_reg.pkl")
-        joblib.dump(lin_reg, linear_reg_path)
-        mlflow.log_artifact(linear_reg_path, artifact_path="models")
 
-        plt.figure(figsize=(8,5))
-        sns.scatterplot(x=y_test, y=y_pred_lr, alpha=0.3)
-        plt.xlabel("Actual Duration")
-        plt.ylabel("Predicted Duration")
-        plt.title("Linear Regression Predictions")
-        plot_path = os.path.join(project_root, "logs/lr_predictions.png")
-        plt.savefig(plot_path)
-        mlflow.log_artifact(plot_path, artifact_path="plots")
+def train_models(
+    input_path: str | Path = PROCESSED_DATA_PATH,
+    model_output_path: str | Path = BEST_MODEL_PATH,
+    *,
+    max_rows: int | None = None,
+    enable_mlflow: bool = True,
+    metadata_output_path: str | Path = MODEL_METADATA_PATH,
+    comparison_output_path: str | Path = REPORT_DIR / "model_comparison.json",
+) -> dict:
+    """Compare Linear Regression and Gradient Boosting on one train/test split."""
 
-    # --- XGBoost ---
-    with mlflow.start_run(run_name="XGBoost"):
-        xgb = XGBRegressor(n_estimators=200, learning_rate=0.1, max_depth=6, random_state=42)
-        xgb.fit(X_train, y_train)
-        y_pred_xgb = xgb.predict(X_test)
+    ensure_project_directories()
+    frame = pd.read_csv(input_path, low_memory=False)
+    missing = sorted(set(MODEL_FEATURES + [TARGET]).difference(frame.columns))
+    if missing:
+        raise ValueError(f"Processed dataset is missing columns: {missing}")
+    if max_rows is not None and len(frame) > max_rows:
+        frame = frame.sample(max_rows, random_state=42)
 
-        xgb_rmse = np.sqrt(mean_squared_error(y_test, y_pred_xgb))
-        xgb_r2 = r2_score(y_test, y_pred_xgb)
+    X_train, X_test, y_train, y_test = train_test_split(
+        frame[MODEL_FEATURES], frame[TARGET], test_size=0.2, random_state=42
+    )
+    candidates = {
+        "linear_regression": (LinearRegression(), {}),
+        "gradient_boosting": (
+            HistGradientBoostingRegressor(max_iter=200, learning_rate=0.08, random_state=42),
+            {"max_iter": 200, "learning_rate": 0.08},
+        ),
+    }
+    if enable_mlflow:
+        mlflow.set_tracking_uri(f"sqlite:///{MLFLOW_DB_PATH}")
+        mlflow.set_experiment("ETA_Prediction_Simple")
 
-        mlflow.log_param("model_type", "XGBoost")
-        mlflow.log_param("n_estimators", 200)
-        mlflow.log_param("learning_rate", 0.1)
-        mlflow.log_param("max_depth", 6)
-        mlflow.log_metric("rmse", xgb_rmse)
-        mlflow.log_metric("r2", xgb_r2)
-        mlflow.xgboost.log_model(xgb, "xgboost_model")
+    results = []
+    trained_models = {}
+    model_output_path = Path(model_output_path)
+    model_output_path.parent.mkdir(parents=True, exist_ok=True)
+    for name, (regressor, parameters) in candidates.items():
+        pipeline = Pipeline([("preprocessor", make_preprocessor()), ("regressor", regressor)])
+        pipeline.fit(X_train, y_train)
+        predicted = np.maximum(pipeline.predict(X_test), 1.0)
+        result = {"model": name, "parameters": parameters, **metrics(y_test, predicted)}
+        results.append(result)
+        trained_models[name] = pipeline
 
-        # Save model + plot as artifacts
-        xgb_model_path = os.path.join(project_root, "models/xgb_model.pkl")
-        joblib.dump(xgb, xgb_model_path)
-        mlflow.log_artifact(xgb_model_path, artifact_path="models")
+        candidate_path = model_output_path.parent / f"{name}.pkl"
+        joblib.dump(pipeline, candidate_path)
+        if enable_mlflow:
+            with mlflow.start_run(run_name=name):
+                mlflow.log_param("model_name", name)
+                mlflow.log_param("dataset_version", dataset_version())
+                mlflow.log_params(parameters)
+                mlflow.log_metrics({key: value for key, value in result.items() if isinstance(value, float)})
 
-        plt.figure(figsize=(8,5))
-        sns.barplot(x=xgb.feature_importances_, y=X.columns)
-        plt.title("XGBoost Feature Importance")
-        plot_path = os.path.join(project_root, "logs/xgb_feature_importance.png")
-        plt.savefig(plot_path)
-        mlflow.log_artifact(plot_path, artifact_path="plots")
+    results.sort(key=lambda item: item["rmse_seconds"])
+    best_name = results[0]["model"]
+    joblib.dump(trained_models[best_name], model_output_path)
 
-    # --- Save best model locally ---
-    if xgb_rmse < lr_rmse:
-        joblib.dump(xgb, model_output_path)
-        print(f"✅ Best model (XGBoost) saved to {model_output_path}")
-    else:
-        joblib.dump(lin_reg, model_output_path)
-        print(f"✅ Best model (Linear Regression) saved to {model_output_path}")
+    metadata = {
+        "model_version": MODEL_VERSION,
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "model_name": best_name,
+        "target": TARGET,
+        "target_unit": "seconds",
+        "features": MODEL_FEATURES,
+        "dataset_version": dataset_version(),
+        "training_rows": len(X_train),
+        "test_rows": len(X_test),
+        "test_metrics": results[0],
+    }
+    metadata_output_path = Path(metadata_output_path)
+    metadata_output_path.parent.mkdir(parents=True, exist_ok=True)
+    metadata_output_path.write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
+    report = {"selected_model": best_name, "models": results}
+    comparison_output_path = Path(comparison_output_path)
+    comparison_output_path.parent.mkdir(parents=True, exist_ok=True)
+    comparison_output_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    return report
+
 
 if __name__ == "__main__":
-    print("🚀 Starting model training...")
-    # Use the same project_root logic for standalone execution
-    processed_data_path = os.path.join(project_root, "data/processed/processed_data.csv")
-    model_output_path = os.path.join(project_root, "models/best_model.pkl")
-    train_models(processed_data_path, model_output_path)
-    print("🎯 Training completed!")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--input", type=Path, default=PROCESSED_DATA_PATH)
+    parser.add_argument("--output", type=Path, default=BEST_MODEL_PATH)
+    parser.add_argument("--max-rows", type=int)
+    parser.add_argument("--no-mlflow", action="store_true")
+    args = parser.parse_args()
+    print(
+        json.dumps(
+            train_models(
+                args.input,
+                args.output,
+                max_rows=args.max_rows,
+                enable_mlflow=not args.no_mlflow,
+            ),
+            indent=2,
+        )
+    )
